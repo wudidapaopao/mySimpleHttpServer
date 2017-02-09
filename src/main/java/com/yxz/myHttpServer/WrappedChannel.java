@@ -6,6 +6,10 @@ import java.util.LinkedList;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
+/**
+* @author Yu 
+* 读写通道包装类
+*/
 public class WrappedChannel {
 	
 	private SocketChannel socketChannel;

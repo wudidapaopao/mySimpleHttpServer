@@ -1,7 +1,7 @@
 package com.yxz.myHttpServer.http;
+
 /**
 * @author Yu 
-* 2016年11月29日 下午4:37:28
 * http返回状态
 */
 public enum HttpStatus {

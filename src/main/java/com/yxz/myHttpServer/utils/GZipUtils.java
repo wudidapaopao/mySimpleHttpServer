@@ -10,14 +10,7 @@ import java.util.zip.GZIPOutputStream;
 * @author Yu 
 * gzip工具类
 */
-public class GZipUtils {  
-	
-    public static void main(String[] args) throws Exception {    
-//    	String a = "F:/javaee/myHttpServer/webroot/test.txt";
-//    	String b = "F:/javaee/myHttpServer/webroot/test.gzip";
-//    	gzipFile(a, b);
-//    	gzip(new byte[]{1,2,3,4,5,6});
-    }   
+public class GZipUtils {   
     
 	public static byte[] gzip(byte[] bytes) throws Exception {  
 		ByteArrayOutputStream bos = new ByteArrayOutputStream(bytes.length);  

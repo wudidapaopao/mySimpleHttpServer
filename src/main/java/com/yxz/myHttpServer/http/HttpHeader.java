@@ -1,8 +1,8 @@
 package com.yxz.myHttpServer.http;
+
 /**
 * @author Yu 
-* 2016年11月29日 下午10:53:26
-* http报文单个头部项包装类
+* http报文单个首部项包装类
 */
 public class HttpHeader {
 	
@@ -26,6 +26,10 @@ public class HttpHeader {
 	
 	private String name;
 	private String value;
+	
+	public HttpHeader() {
+		
+	}
 	
 	public HttpHeader(String name, String value) {
 		this.name = name;

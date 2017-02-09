@@ -1,10 +1,10 @@
 package com.yxz.myHttpServer.http;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
 * @author Yu 
-* 2016年11月30日 下午4:45:25
 * http请求参数包装类
 */
 public class HttpParams {

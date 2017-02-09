@@ -19,8 +19,7 @@ import com.yxz.myHttpServer.http.HttpVersion;
 
 /**
 * @author Yu 
-* 2016年11月29日 上午2:07:12
-* 编码解码调度类
+* http请求解码
 */
 public class RequestHandler implements Runnable {
 	
@@ -72,18 +71,18 @@ public class RequestHandler implements Runnable {
 	public void run() {
 		try {
     		switch(state) {
-    			case START: {
-    				if(!skipControlCharacter())
+    			case START: { //报文开始阶段跳过控制字符
+    				if(!skipControlCharacter()) 
     					return;
     				state = LINE;
     			}
-    			case LINE: {
+    			case LINE: { //解析请求行
     				String line = null;
     				try {
     					line = lineParser.parse();
     				} catch(Exception e) {
-    					logger.error(e.getMessage());
-    					return;
+    					logger.error("", e);
+    					throw new RuntimeException(e);
     				}
     				if(line == null)
     					return;
@@ -92,12 +91,7 @@ public class RequestHandler implements Runnable {
     					init();
     					return;
     				}
-    				try {
-    					doLine(lines);
-    				} catch (Exception e) {
-    					init();
-    					return;
-    				}
+    				doLine(lines);
     				state = HEADER;
     			} 
     			case HEADER: {
@@ -106,10 +100,10 @@ public class RequestHandler implements Runnable {
         				try {
         					line = this.headerParser.parse();
         				} catch(Exception e) {
-        					logger.error(e.getMessage());
-        					return;
+        					logger.error("", e);
+        					throw new RuntimeException(e);
         				}
-        				if(line == null) {//进入body解析
+        				if(line == null) { //进入body解析
         					break;
         				}
         				String[] lines = line.split(new String() + (char)HttpConstants.COLON, 2);
@@ -133,24 +127,23 @@ public class RequestHandler implements Runnable {
     				String body = null;
     				int len = httpRequest.getContentLength();
     				HttpMethod httpMethod = httpRequest.getHttpMethod();
-    				if(httpMethod == HttpMethod.GET) {
-    					// to do 
+    				if(httpMethod == HttpMethod.GET) { //get方法
     					this.state = FINISHED;
     				}
-    				else if(httpMethod == HttpMethod.POST){
+    				else if(httpMethod == HttpMethod.POST){ //post方法
     					bodyParser.setLength(len);
     					try {
     						body = this.bodyParser.parse();
     					} catch(Exception e) {
-    						logger.error(e.getMessage());
-    						return;
+    						logger.error("", e);
+    						throw new RuntimeException(e);
     					}
     					if(body == null)
     						return;
     					httpRequest.setRequestBody(body);
     					this.state = FINISHED;
     				}
-    				else {
+    				else { //其他http方法
     					//to do
     				}
     			}
@@ -161,8 +154,7 @@ public class RequestHandler implements Runnable {
 				ResponseHandler responseHandler = new ResponseHandler(httpRequest, NioHttpServer.pathPrefix, wrappedChannel, this, chunked);
 				responseHandler.buildHttpResponse();
 				if(!chunked) {
-    				List<SendBuffer> sendBuffers;
-    				sendBuffers = responseHandler.sendResponse();
+    				List<SendBuffer> sendBuffers = responseHandler.sendResponse();
     				for(int i = 0; i < sendBuffers.size(); i++) {
     					wrappedChannel.addSendBuffer(sendBuffers.get(i));
     				}
@@ -187,6 +179,7 @@ public class RequestHandler implements Runnable {
 		key.interestOps(key.interestOps() | op);
 	}
 
+	//封装http请求首部
 	private HttpHeader doHeader(String[] lines) {
 		String name = lines[0];
 		String value = lines[1];
@@ -194,6 +187,7 @@ public class RequestHandler implements Runnable {
 		return httpHeader;
 	}
 
+	//封装http请求行
 	private void doLine(String[] lines) {
 		String s1 = lines[0];
 		HttpMethod method = HttpMethod.getMethod(s1);
@@ -220,7 +214,10 @@ public class RequestHandler implements Runnable {
 			return true;
 		return false;
 	}
-
+	
+	/*
+	 * 将ByteBuffer读取到的字节复制到RequestHandler的字节数组中
+	 */
 	public void add(ByteBuffer bb) {
 		if(bb.remaining() > this.bytes.length - write) {
 			compact();
@@ -273,7 +270,12 @@ public class RequestHandler implements Runnable {
 					read++;
 					String ret = sb.toString();
 					if(sb.length() == 0) {
-						state = BODY;	//解析header出现空行，进入实体部分
+						if(state == HEADER) {
+							state = BODY;
+						}
+						else {
+							init();
+						}
 						return null;
 					}
 					init();
@@ -289,7 +291,7 @@ public class RequestHandler implements Runnable {
 		}
 		
 		protected void doException() {
-			throw new LineTooLongException("the request line is too long");
+			throw new LineTooLongException("the line is too long");
 		}
 
 		protected void init() {

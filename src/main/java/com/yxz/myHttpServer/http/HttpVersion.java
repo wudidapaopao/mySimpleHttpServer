@@ -1,7 +1,7 @@
 package com.yxz.myHttpServer.http;
+
 /**
 * @author Yu 
-* 2016年11月29日 下午9:41:02
 * http版本：1.0和1.1
 */
 public class HttpVersion {

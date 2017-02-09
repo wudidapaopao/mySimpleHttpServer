@@ -9,8 +9,7 @@ import org.slf4j.LoggerFactory;
 
 /**
 * @author Yu 
-* 2016年11月29日 下午3:07:21
-* 发送缓冲类
+* 默认发送缓冲类
 */
 public class DefaultSendBuffer implements SendBuffer {
 	

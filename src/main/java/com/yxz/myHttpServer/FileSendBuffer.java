@@ -7,8 +7,7 @@ import java.nio.channels.SocketChannel;
 
 /**
 * @author Yu 
-* 2016年12月15日 下午4:43:09
-* 
+* 文件发送缓冲类
 */
 public class FileSendBuffer implements SendBuffer {
 

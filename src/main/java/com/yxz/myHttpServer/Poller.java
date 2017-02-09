@@ -20,8 +20,7 @@ import org.slf4j.LoggerFactory;
 
 /**
 * @author Yu 
-* 2016年11月28日 下午11:29:33
-* Reactor模式中负责IO的线程类
+* Reactor模式中负责IO的线程
 */
 public class Poller implements Runnable {
 
@@ -29,7 +28,6 @@ public class Poller implements Runnable {
 	
 	protected CountDownLatch countDownLatch = new CountDownLatch(1);//协调poller全部开始
 	protected CountDownLatch countDownLatchClose = new CountDownLatch(1);//协调poller全部关闭
-	private AtomicBoolean wakenUp = new AtomicBoolean(false);
 	
 	private int keepLiveTimeOut = 20000;
 	private int internalTime = 1000;
@@ -52,6 +50,9 @@ public class Poller implements Runnable {
 	//需要进行读写的任务队列
 	private ConcurrentLinkedQueue<WrappedChannel> queue = new ConcurrentLinkedQueue<>();
 	
+	/*
+	 * 向poller线程注册新的读写事件
+	 */
 	public void register(WrappedChannel channel) {
 		queue.add(channel);
 		channel.setSelector(selector);
@@ -59,6 +60,11 @@ public class Poller implements Runnable {
 		this.wakeup();
 	}
 	
+	private AtomicBoolean wakenUp = new AtomicBoolean(false);
+	
+	/*
+	 * 唤醒selector
+	 */
 	protected void wakeup() {
 		if(wakenUp.compareAndSet(false, true)) { //避免多次调用select.wakeUp，wakeUp是向通道进行写操作，费力。
 			selector.wakeup();
@@ -71,9 +77,8 @@ public class Poller implements Runnable {
 		while(true) {	
 			this.wakenUp.set(false);//#1
 			try {
-				long before = System.currentTimeMillis();
-    			int count = selector.select(selectTimeOut);//#2
-    			processQueue();
+    			selector.select(selectTimeOut);//#2
+    			processQueue();//从队列中取出读写事件，并在selector中注册
     			if(wakenUp.get()) {
     				selector.wakeup();//避免#1和#2之间wakeup被调用，这样容易导致下下次select被阻塞很久
     			}
@@ -89,7 +94,7 @@ public class Poller implements Runnable {
             		    	attach.setTime(System.currentTimeMillis());
             		    	if((readyOps & SelectionKey.OP_READ) != 0) {
             		    		int interestOp = readyOps & (~SelectionKey.OP_READ);
-            		    		key.interestOps(interestOp);//避免多线程冲突
+            		    		key.interestOps(interestOp);
                 		    	attach.setInterest(interestOp);
                 		    	if(!read(key)) {
             		    			continue; //connection is closed
@@ -97,13 +102,13 @@ public class Poller implements Runnable {
             		    	}
             		    	if((readyOps & SelectionKey.OP_WRITE) != 0) {
             		    		int interestOp = readyOps & (~SelectionKey.OP_WRITE);
-            		    		key.interestOps(interestOp);//避免多线程冲突
+            		    		key.interestOps(interestOp);
                 		    	attach.setInterest(interestOp);
                 		    	write(key);
             		    	}
             		    }
-            		    //timeout();
         		    }
+        		    //timeout();
     			}
     			else {
     				for (SelectionKey k: selector.keys()) {
@@ -123,7 +128,7 @@ public class Poller implements Runnable {
 		}
 	}
 
-	public void shutDownPoller() {//运行Poller的线程不能调用这个方法，否则造成永久阻塞
+	public void shutDownPoller() {
 		this.running = false;
 		if(selector != null) {
 			selector.wakeup();
@@ -162,6 +167,7 @@ public class Poller implements Runnable {
 		nextTime += internalTime;
 	}
 
+	//write操作
 	private void write(SelectionKey key) {
 		if(key == null || !key.isValid())
 			return;
@@ -169,42 +175,57 @@ public class Poller implements Runnable {
 		WrappedChannel wc = (WrappedChannel) key.attachment();
 		Queue<SendBuffer> qs = wc.getSendBuffers();
 		SendBuffer sb = qs.peek();
-		int written = 0;
 		try {
-			if(sb != null) {
+			while(sb != null) {
         		long length = sb.writeToChannel(channel);
+        		if(length == -1) {
+        			close(channel.keyFor(selector));
+        			break;
+        		}
+        		else if(length == 0) {
+        			break;
+        		}
         		if(sb.isFinished()) {
         			qs.poll();
         		}
+        		else {
+        			break;
+        		}
+        		sb.close();
+        		sb = qs.peek();
 			}
-    		if(!qs.isEmpty() || !wc.isFinished()) {
-    			setOp(wc, SelectionKey.OP_WRITE);
-    			this.wakeup();
+    		if(!qs.isEmpty() || !wc.isFinished()) {//write未完成，注册write事件
+    			if(setOp(wc, SelectionKey.OP_WRITE));
+    				this.wakeup();
     		}
-    		else {
+    		else {//write完成，注册read事件
     			wc.setFinished(false);
-    			setOp(wc, SelectionKey.OP_READ);
-    			this.wakeup();
+    			if(setOp(wc, SelectionKey.OP_READ));
+    				this.wakeup();
     		}
-		} catch(Exception e){
+		} catch(Exception e) {
+			logger.error("", e);
 			close(key);
 		}
 	}
 
-	private void setOp(WrappedChannel wc, int op) {
+	//向通道注册感兴趣的读写操作
+	private boolean setOp(WrappedChannel wc, int op) {
 		SocketChannel channel = wc.getSocketChannel();
 		Selector selector = this.selector;
 		SelectionKey key = channel.keyFor(selector);
 		if(key == null || !key.isValid())
-			return;
+			return false;
 		int interestOp = wc.getInterest();
 		if((interestOp & op) == 0) {
 			interestOp = interestOp | op;
 			key.interestOps(interestOp);
 			wc.setInterest(interestOp);
 		}
+		return true;
 	}
 
+	//读操作
 	private boolean read(SelectionKey key) {
 		SocketChannel channel = (SocketChannel) key.channel();
 		bb.clear();
@@ -235,6 +256,7 @@ public class Poller implements Runnable {
 		return true;
 	}
 	
+	//关闭在selector中注册的通道
 	private void close(SelectionKey key) {
 		key.cancel();
 		try {

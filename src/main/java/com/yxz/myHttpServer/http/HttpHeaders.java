@@ -5,8 +5,7 @@ import java.util.List;
 
 /**
 * @author Yu 
-* 2016年11月29日 下午10:53:20
-* http报文头部项包装类
+* http报文首部项包装类
 */
 public class HttpHeaders {
 	

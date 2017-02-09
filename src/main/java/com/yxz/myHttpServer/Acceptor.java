@@ -8,8 +8,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
 * @author Yu 
-* 2016年11月29日 上午12:17:37
-* Reactor模式负责前端接受连接的线程类
+* Reactor模式负责前端接受连接的线程
 */
 public class Acceptor implements Runnable {
 
@@ -26,7 +25,7 @@ public class Acceptor implements Runnable {
 		running = true;
 	}
 	
-	public void run() {
+	public void run() { //阻塞地接受连接请求
 		while(true) {
 			try {
 				SocketChannel socketChannel = serverSocketChannel.accept();
@@ -55,17 +54,17 @@ public class Acceptor implements Runnable {
 		}
 	}
 	
+	//关闭acceptor线程
 	public void shutDownAcceptor() {
 		this.running = false;
 	}
 	
 	private AtomicInteger count = new AtomicInteger(0);
 	
+	//平均地把接受的连接分发给poller线程
 	private Poller getRandomPoller() {
-		//如果是poller数量是2的幂，用&的方法代替求余，效率更高
-		int c = count.get();
-		if(((c & nPollers) != nPollers) && (nPollers & (nPollers - 1)) == 0)
-			return pollers[nPollers & count.getAndIncrement()];
+		if((nPollers & (nPollers - 1)) == 0) //如果是poller数量是2的幂，用&的方法代替求余，效率更高
+			return pollers[(nPollers - 1) & count.getAndIncrement()];
 		return pollers[Math.abs(count.getAndIncrement()) % nPollers];
 	}
 

@@ -26,19 +26,18 @@ import com.yxz.myHttpServer.utils.SimpleThreadPool;
 
 /**
 * @author Yu 
-* httpServer启动类
+* http服务器启动类
 */
 public class NioHttpServer {
-
+	
 	private static final Logger logger = LoggerFactory.getLogger(NioHttpServer.class);
 	
-	//静态文件所在路径
+	/*
+	 * 静态文件所在路径
+	 */
 	public static final String pathPrefix = System.getProperty("user.dir") 
 											+ File.separator  
 											+ "webroot";
-	
-	//tcp超时时间
-	private int timeout = 20000;
 	
 	//服务器端口号
 	private int port = 80;
@@ -49,7 +48,7 @@ public class NioHttpServer {
 	//进行读写的线程数
 	private int nPollers = Runtime.getRuntime().availableProcessors(); 
 	
-	//进行网络读写的线程数组
+	//进行读写的线程组
 	private Poller[] pollers = new Poller[nPollers];
 	
 	//进行业务数据处理的线程数
@@ -58,12 +57,10 @@ public class NioHttpServer {
 	//进行数据处理的线程池
 	//private ExecutorService executor = Executors.newFixedThreadPool(nProcessors); 
 	private Executor executor =  new SimpleThreadPool(new LinkedList<Thread>(), new ArrayBlockingQueue<Runnable>(5), 10, 5, 2000, true);
-
-	public static void main(String[] args) {
-		NioHttpServer httpServer = new NioHttpServer();
-		httpServer.start();
-	}
 	
+	/*
+	 * 启动http服务器
+	 */
 	public void start() {
 		ServerSocketChannel serverSocketChannel = null;
 		try {
@@ -72,26 +69,26 @@ public class NioHttpServer {
 			serverSocketChannel.configureBlocking(true);
 		} catch (IOException e) {
 			logger.error("failed to start", e);
-			return;
+			throw new RuntimeException(e);
 		}
 		for(int i = 0; i < nPollers; i++) {
 			try {
 				pollers[i] = new Poller(executor);
 			} catch (IOException e) {
 				logger.error("failed to creat Poller " + i, e);
-				return;
+				throw new RuntimeException(e);
 			}
 			new Thread(pollers[i]).start();
 		}
 		if(!waitForPollers(10)) {//等待所有poller线程都启动，最多等10秒
-			logger.error("failed to start");
+			logger.error("failed to start pollers");
 			return;
 		}
 		for(int i = 0; i < nAcceptors; i++) {
 			new Thread(new Acceptor(serverSocketChannel, nPollers, pollers)).start();
 		}
 	}
-
+	
 	private boolean waitForPollers(long time) {
 		long deadTime = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(time);
 		for(Poller poller : pollers) {
@@ -111,7 +108,13 @@ public class NioHttpServer {
 		return true;
 	}
 	
-	private boolean shutDownAllPollers(long time) {
+	/*
+	 * 关闭poller线程组
+	 */
+	public boolean shutDownAllPollers(long time) {
+		for(Poller poller : pollers) {
+			poller.shutDownPoller();
+		}
 		long deadTime = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(time);
 		for(Poller poller : pollers) {
 			CountDownLatch countDownLatchClose = poller.countDownLatchClose;
@@ -128,6 +131,14 @@ public class NioHttpServer {
 			}
 		}
 		return true;
+	}
+	
+	/*
+	 * http服务器启动入口
+	 */
+	public static void main(String[] args) {
+		NioHttpServer httpServer = new NioHttpServer();
+		httpServer.start();
 	}
 	
 }

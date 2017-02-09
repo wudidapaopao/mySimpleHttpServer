@@ -1,7 +1,7 @@
 package com.yxz.myHttpServer.http;
+
 /**
 * @author Yu 
-* 2016年11月29日 下午9:03:34
 * http请求包装类
 */
 public class HttpRequest {
